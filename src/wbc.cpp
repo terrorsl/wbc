@@ -268,7 +268,7 @@ void WaterBoardCounter::loop()
     }
     if(setup_button_down)
     {
-        if(current-setup_button_down>WAIT_SETUP_MS)
+        if(current-setup_button_time>WAIT_SETUP_MS)
         {
             Serial.println("button down 3 sec");
 
