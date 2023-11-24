@@ -164,11 +164,11 @@ bool WaterBoardCounter::setup_wifi(const char *name, const char *server, const c
     //manager.setSaveConfigCallback(saveWifiManagerParam);
     //manager.setPreSaveParamsCallback(preSaveWifiManagerParam);
     //manager.setSaveParamsCallback
-    const char *menu[] = {"wifi"};//, "wifinoscan", "info", "param"};
+    const char *menu[] = {"wifi","wifinoscan","exit"};//, "wifinoscan", "info", "param"};
     manager.setMenu(menu,sizeof(menu)/sizeof(menu[0]));
     manager.setTitle("WBC configuration");
 
-    if(manager.autoConnect(name))
+    if(manager.startConfigPortal(name)==true)
     {
         Serial.println("save param");
         ini_write("mqtt", "server", mqtt_server_param.getValue());
@@ -284,7 +284,7 @@ void WaterBoardCounter::loop()
             {
                 ini_close();
 #ifdef ESP8266
-                ESP.reset();
+                ESP.restart();
 #else
                 ESP.restart();
 #endif
