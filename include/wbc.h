@@ -70,6 +70,7 @@ private:
     void send_result();
 
     WiFiManager *manager;
+    WiFiManagerParameter *wifi_manager_params[7];
 
     Counter counters[WBC_COUNTER_SIZE];
     PubSubClient mqtt_client;
