@@ -24,14 +24,16 @@ void saveWifiManagerParam()
     Serial.println("saveWifiManagerParam");
     WiFiManager *manager=wbc.get_wifi_manager();
     WiFiManagerParameter **params=manager->getParameters();
-    ini_write("mqtt", "device", params[0]->getValue());
-    ini_write("mqtt", "server", params[1]->getValue());
-    ini_write("mqtt", "port", params[2]->getValue());
-    ini_write("mqtt", "user", params[3]->getValue());
-    ini_write("mqtt", "passw", params[4]->getValue());
+    ini_write("mqtt", "device", params[WIFI_PARAM_DEVICE]->getValue());
+    ini_write("mqtt", "server", params[WIFI_PARAM_SERVER]->getValue());
+    ini_write("mqtt", "port", params[WIFI_PARAM_PORT]->getValue());
+    ini_write("mqtt", "user", params[WIFI_PARAM_USER]->getValue());
+    ini_write("mqtt", "passw", params[WIFI_PARAM_PASSW]->getValue());
 
-    ini_write("counter_0", "serial", params[5]->getValue());
-    ini_write("counter_0", "value", params[6]->getValue());
+    ini_write("counter_0", "serial", params[WIFI_PARAM_COUNTER_SERIAL_0]->getValue());
+    ini_write("counter_0", "value", params[WIFI_PARAM_COUNTER_VAL_0]->getValue());
+    ini_write("counter_1", "serial", params[WIFI_PARAM_COUNTER_SERIAL_1]->getValue());
+    ini_write("counter_1", "value", params[WIFI_PARAM_COUNTER_VAL_1]->getValue());
 }
 
 IRAM_ATTR void wbc_0_callback()
@@ -58,6 +60,7 @@ void WaterBoardCounter::update_counter(uint8_t index, uint8_t v)
 {
     counters[index].value += v;
     counters[index].timestamp = millis();
+    need_update_value=true;
 };
 void WaterBoardCounter::send_result()
 {
@@ -66,8 +69,8 @@ void WaterBoardCounter::send_result()
     {
         String mqtt_server=ini_read("mqtt", "server", "mqtt.dealgate.ru");
         uint16_t mqtt_port=ini_read("mqtt", "port", String(1883)).toInt();
-        String mqtt_user=ini_read("mqtt", "user", "terror");
-        String mqtt_passw=ini_read("mqtt", "passw", "terror_23011985");
+        String mqtt_user=ini_read("mqtt", "user", "");
+        String mqtt_passw=ini_read("mqtt", "passw", "");
         Serial.printf("param:%s %s %s\n", mqtt_server.c_str(), mqtt_user.c_str(), mqtt_passw.c_str());
 
         if(init_wifi(mqtt_server.c_str(), mqtt_port, mqtt_user.c_str(), mqtt_passw.c_str())==false)
@@ -100,6 +103,7 @@ bool WaterBoardCounter::setup()
     pinMode(SETUP_BUTTON_PIN, INPUT_PULLUP);
     pinMode(WBC_0_PIN, INPUT_PULLUP);
     pinMode(WBC_1_PIN, INPUT_PULLUP);
+    pinMode(VDROP_PIN, INPUT);
 #if WBC_COUNTER_SIZE == 4
     pinMode(WBC_2_PIN, INPUT_PULLUP);
     pinMode(WBC_3_PIN, INPUT_PULLUP);
@@ -145,7 +149,9 @@ bool WaterBoardCounter::setup()
         ini_open(WBC_INI);
         Serial.println(ini_read("mqtt", "port", "0"));
         counters[0].value = ini_read("counter_0", "value", "0").toInt();
-        strcpy(counters[0].serial, ini_read("counter_0", "serial", "").c_str());
+        strcpy(counters[0].serial, ini_read("counter_0", "serial", "unknown").c_str());
+        counters[1].value = ini_read("counter_1", "value", "0").toInt();
+        strcpy(counters[1].serial, ini_read("counter_1", "serial", "unknown").c_str());
     }
 
     mqtt_client.setClient(espClient);
@@ -165,7 +171,9 @@ bool WaterBoardCounter::setup_wifi(const char *name, const char *server, const c
     wifi_manager_params[4]=new WiFiManagerParameter("mqtt_pass", "mqtt password", mqtt_password, 32);
     wifi_manager_params[5]=new WiFiManagerParameter("counter_0_serial", "Counter 0 serial", counters[0].serial, 32);
     wifi_manager_params[6]=new WiFiManagerParameter("counter_0_value", "Counter 0 value", String(counters[0].value).c_str(), 32);
-    for(int i=0;i<7;i++)
+    wifi_manager_params[7]=new WiFiManagerParameter("counter_1_serial", "Counter 1 serial", counters[1].serial, 32);
+    wifi_manager_params[8]=new WiFiManagerParameter("counter_1_value", "Counter 1 value", String(counters[1].value).c_str(), 32);
+    for(int i=0;i<WIFI_PARAM_COUNT;i++)
         manager->addParameter(wifi_manager_params[i]);
     manager->setSaveConfigCallback(saveWifiManagerParam);
     const char *menu[] = {"wifi","wifinoscan","exit"};//, "wifinoscan", "info", "param"};
@@ -173,49 +181,10 @@ bool WaterBoardCounter::setup_wifi(const char *name, const char *server, const c
     manager->setTitle("WBC configuration");
     bool status=manager->startConfigPortal(name);
     delete manager;
-    for(int i=0;i<7;i++)
+    for(int i=0;i<WIFI_PARAM_COUNT;i++)
         delete wifi_manager_params[i];
     Serial.printf("status:%d\n", status);
     return status;
-    /*WiFiManager manager;
-
-    WiFiManagerParameter mqtt_server_param("mqtt_server", "mqtt server", server, 40);
-    WiFiManagerParameter mqtt_server_port_param("mqtt_port", "mqtt port", port, 6);
-
-    WiFiManagerParameter mqtt_server_user_param("mqtt_user", "mqtt user", mqtt_user, 32);
-    WiFiManagerParameter mqtt_server_pass_param("mqtt_pass", "mqtt password", mqtt_password, 32);
-
-    WiFiManagerParameter counter_0_serial_param("counter_0_serial", "Counter 0 serial", counters[0].serial, 32);
-    WiFiManagerParameter counter_0_value_param("counter_0_value", "Counter 0 value", String(counters[0].value).c_str(), 32);
-
-    manager.addParameter(&mqtt_server_param);
-    manager.addParameter(&mqtt_server_port_param);
-    manager.addParameter(&mqtt_server_user_param);
-    manager.addParameter(&mqtt_server_pass_param);
-
-    manager.addParameter(&counter_0_serial_param);
-    manager.addParameter(&counter_0_value_param);
-
-    //manager.setSaveConfigCallback(saveWifiManagerParam);
-    //manager.setPreSaveParamsCallback(preSaveWifiManagerParam);
-    //manager.setSaveParamsCallback
-    const char *menu[] = {"wifi","wifinoscan","exit"};//, "wifinoscan", "info", "param"};
-    manager.setMenu(menu,sizeof(menu)/sizeof(menu[0]));
-    manager.setTitle("WBC configuration");
-
-    if(manager.startConfigPortal(name)==true)
-    {
-        Serial.println("save param");
-        ini_write("mqtt", "server", mqtt_server_param.getValue());
-        ini_write("mqtt", "port", mqtt_server_port_param.getValue());
-        ini_write("mqtt", "user", mqtt_server_user_param.getValue());
-        ini_write("mqtt", "passw", mqtt_server_pass_param.getValue());
-
-        ini_write("counter_0", "serial", counter_0_serial_param.getValue());
-        ini_write("counter_0", "value", counter_0_value_param.getValue());
-        return true;
-    }*/
-    return false;
 };
 void WaterBoardCounter::attach_interrupt(uint8_t pin)
 {
@@ -297,10 +266,6 @@ void WaterBoardCounter::loop()
             break;
         }
     }
-    if(need_sleep)
-    {
-        //light_sleep();
-    }
     if(setup_button_down)
     {
         if(current-setup_button_time>WAIT_SETUP_MS)
@@ -332,6 +297,13 @@ void WaterBoardCounter::loop()
             setup_button_down=false;
         }
     }
+    else
+    {
+        if(need_sleep)
+        {
+            //light_sleep();
+        }
+    }
 };
 void WaterBoardCounter::light_sleep()
 {
@@ -341,6 +313,8 @@ void WaterBoardCounter::light_sleep()
     wifi_fpm_set_sleep_type(LIGHT_SLEEP_T); // set sleep type, the above    posters wifi_set_sleep_type() didnt seem to work for me although it did let me compile and upload with no errors
     wifi_fpm_open();// Enables force sleep
     gpio_pin_wakeup_enable(SETUP_BUTTON_PIN, GPIO_PIN_INTR_LOLEVEL);
+    gpio_pin_wakeup_enable(WBC_0_PIN, GPIO_PIN_INTR_LOLEVEL);
+    gpio_pin_wakeup_enable(WBC_1_PIN, GPIO_PIN_INTR_LOLEVEL);
     wifi_fpm_do_sleep(0xFFFFFFF); // Sleep for longest possible time
 #else
     //esp_sleep_enable_ext1_wakeup()

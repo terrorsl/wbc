@@ -6,6 +6,7 @@
 #define WBC_COUNTER_SIZE 2
 #define LED_PIN 2
 #define SETUP_BUTTON_PIN 12
+#define VDROP_PIN 4
 
 #define WBC_0_PIN 13
 #define WBC_1_PIN 14
@@ -22,6 +23,19 @@
 #define WBC_1_PIN 12
 #define WBC_2_PIN 13
 #define WBC_3_PIN 14
+#endif
+
+#define WIFI_PARAM_COUNT 5+WBC_COUNTER_SIZE*2
+#define WIFI_PARAM_DEVICE 0
+#define WIFI_PARAM_SERVER 1
+#define WIFI_PARAM_PORT 2
+#define WIFI_PARAM_USER 3
+#define WIFI_PARAM_PASSW 4
+#define WIFI_PARAM_COUNTER_SERIAL_0 5
+#define WIFI_PARAM_COUNTER_VAL_0 6
+#define WIFI_PARAM_COUNTER_SERIAL_1 7
+#define WIFI_PARAM_COUNTER_VAL_1 8
+#if WBC_COUNTER_SIZE==4
 #endif
 
 #define WBC_INI "/wbc.ini"
@@ -70,9 +84,10 @@ private:
     void send_result();
 
     WiFiManager *manager;
-    WiFiManagerParameter *wifi_manager_params[7];
+    WiFiManagerParameter *wifi_manager_params[WIFI_PARAM_COUNT];
 
     Counter counters[WBC_COUNTER_SIZE];
+    bool need_update_value;
     PubSubClient mqtt_client;
     unsigned long before_time;
 
