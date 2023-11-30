@@ -35,9 +35,13 @@ unsigned long size_tmp_file = 0;
 bool ini_open (String ini_name) {
   unsigned long cnt = 0;
 
-  if (ini.available()) ini_close();
+  if (ini) ini_close();
 
-  if (LittleFS.exists(ini_name)) ini = LittleFS.open(ini_name, "r+");
+  if (LittleFS.exists(ini_name))
+    ini = LittleFS.open(ini_name, "r");
+  else
+    return false;
+  Serial.printf("open size:%d\n",ini.size());
   if (ini.size() > 0) {
     ini_fname = ini_name;
     size_ini_file = ini.size();
@@ -52,15 +56,15 @@ bool ini_open (String ini_name) {
       }
     }
   }
-  ini_close();
-  return false;
+  //ini_close();
+  return true;
 }
 
 
 
 bool ini_eof() {
-  //if (!ini) return true;
-  if(ini.available()==false) return true;
+  if (!ini) return true;
+  //if(ini.available()==false) return true;
   return ( pos_ini_file >= size_ini_file );
 }
 
@@ -85,8 +89,8 @@ char get_char() {
 
 
 String ini_read_line() {
-  //if (!ini) return "";
-  if(ini.available()==false) return "";
+  if (!ini) return "";
+  //if(ini.available()==false) return "";
 
   String  s = "";
   char    c = 0;
@@ -110,7 +114,7 @@ String ini_read_line() {
 
 
 String ini_read(String section, String key, String def) {
-  //if (!ini) return "";
+  if (!ini) return "";
 
   section.toUpperCase();
   key.toUpperCase();
@@ -135,6 +139,7 @@ String ini_read(String section, String key, String def) {
     }
   }
 
+Serial.printf("found:%d\n",found);
   if (found) { // got section
     found = false;
     while (!ini_eof() ) { // find key
@@ -186,8 +191,8 @@ bool ini_write_line(String s) {
 
 
 bool ini_write(String section, String key, String value) {
-  //if (!ini) return false;
-  if(ini.available()==false) return false;
+  if (!ini) return false;
+  //if(ini.available()==false) return false;
   bool res = false;
 
   section.trim();
@@ -228,7 +233,7 @@ bool ini_write(String section, String key, String value) {
         if ( s == "[" + sec_upp + "]" ) { section_found = true; break; } // got it!
       }
     }
-
+    Serial.printf("section_found:%d\n",section_found);
     // we are inside the section
     if (section_found) {
       key_found = false;
@@ -497,14 +502,16 @@ bool ini_delete_section(String section) {
 
 
 bool ini_close() {
-  if (ini.available()) ini.close();
+  //if (ini.available()) ini.close();
+  ini.close();
   ini = LittleFS.open(ini_fname, "w");
 #ifdef ESP8266
   ini.write(p_ini_file, size_ini_file);
 #else
   ini.write((const uint8_t*)p_ini_file, size_ini_file);
 #endif
-  if (ini.available()) ini.close();
+  //if (ini.available()) ini.close();
+  ini.close();
 
   if (p_ini_file) free(p_ini_file);
   pos_ini_file  = 0;

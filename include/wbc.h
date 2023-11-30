@@ -39,6 +39,7 @@
 #endif
 
 #define WBC_INI "/wbc.ini"
+#define WBC_JSON "/wbc.json"
 
 #define INTERRUPT_ALL 0xff
 #define WAIT_SETUP_MS 3000
@@ -59,6 +60,11 @@ enum CounterValueType
 };
 struct Counter
 {
+    Counter()
+    {
+        value=0;
+        value_per_count=10;
+    };
     unsigned char value_type;
     // value per count, example 1 count = 10 liter
     unsigned char value_per_count;
@@ -81,12 +87,19 @@ public:
 private:
     bool setup_wifi(const char *device_name, const char *server, const char *port, const char *mqtt_user, const char *mqtt_password);
     bool init_wifi(const char *server, uint16_t port, const char *mqtt_user, const char *mqtt_password);
+
+    void init_config();
+    void read_config();
+    void save_config();
+    
     void attach_interrupt(uint8_t pin);
     void detach_interrupt();
 
     void light_sleep();
 
     void send_result();
+
+    void save();
 
     WiFiManager *manager;
     WiFiManagerParameter *wifi_manager_params[WIFI_PARAM_COUNT];
