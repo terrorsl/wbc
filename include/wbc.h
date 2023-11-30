@@ -44,6 +44,11 @@
 #define WAIT_SETUP_MS 3000
 #define WAIT_SLEEP_MS 60000
 
+#define WBC_STATUS_OK 0
+#define WBC_STATUS_SETUP 1
+#define WBC_STATUS_VDROP 2
+#define WBC_STATUS_SLEEP 3
+
 #include<WiFiManager.h>
 #include <PubSubClient.h>
 
@@ -90,6 +95,8 @@ private:
     bool need_update_value;
     PubSubClient mqtt_client;
     unsigned long before_time;
+
+    unsigned char status;
 
     bool setup_button_down;
     unsigned long setup_button_time;

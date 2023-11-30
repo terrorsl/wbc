@@ -2,8 +2,12 @@
 #include<LittleFS.h>
 #include"SPIFFS_ini.h"
 #include <ArduinoJson.h>
+#include <NTPClient.h>
+#include <CronAlarms.h>
 
 WiFiClient espClient;
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP);
 extern WaterBoardCounter wbc;
 
 void callback(char* topic, byte* payload, unsigned int length)
@@ -34,6 +38,9 @@ void saveWifiManagerParam()
     ini_write("counter_0", "value", params[WIFI_PARAM_COUNTER_VAL_0]->getValue());
     ini_write("counter_1", "serial", params[WIFI_PARAM_COUNTER_SERIAL_1]->getValue());
     ini_write("counter_1", "value", params[WIFI_PARAM_COUNTER_VAL_1]->getValue());
+}
+void WeeklyAlarm()
+{
 }
 
 IRAM_ATTR void wbc_0_callback()
@@ -91,7 +98,15 @@ void WaterBoardCounter::send_result()
     String topic=mqtt_device+"/result";
     mqtt_client.publish(topic.c_str(), payload.c_str(), true);
     topic = mqtt_device+"/status";
-    payload="ok";
+    switch(status)
+    {
+    case WBC_STATUS_OK:
+        payload="ok";
+        break;
+    case WBC_STATUS_VDROP:
+        payload="low battery";
+        break;
+    }
     mqtt_client.publish(topic.c_str(), payload.c_str(), true);
 };
 bool WaterBoardCounter::setup()
@@ -157,7 +172,10 @@ bool WaterBoardCounter::setup()
     mqtt_client.setClient(espClient);
     mqtt_client.setCallback(callback);
  
+    //Cron.create("0 00 24 * * 6", WeeklyAlarm);
+
     before_time = millis();
+    status = WBC_STATUS_OK;
     return true;
 };
 bool WaterBoardCounter::setup_wifi(const char *name, const char *server, const char *port, const char *mqtt_user, const char *mqtt_password)
@@ -232,6 +250,7 @@ bool WaterBoardCounter::init_wifi(const char *mqtt_server, uint16_t mqtt_port, c
     delay(500);
     if(WiFi.isConnected())
     {
+        timeClient.begin();
         mqtt_client.setServer(mqtt_server, mqtt_port);
         String mqtt_device=ini_read("mqtt", "device", "WBC_test");
         if(mqtt_client.connect(mqtt_device.c_str(), mqtt_user, mqtt_password))
@@ -256,16 +275,15 @@ void WaterBoardCounter::loop()
     {
         mqtt_client.loop();
     }
-
-    bool need_sleep=true;
-    for(int i=0;i<WBC_COUNTER_SIZE;i++)
+    if(WiFi.isConnected())
     {
-        if(current-counters[i].timestamp<WAIT_SLEEP_MS)
+        if(timeClient.update())
         {
-            need_sleep=false;
-            break;
+            timeval tv = {timeClient.getEpochTime(), 0};
+            settimeofday(&tv,0);
         }
     }
+
     if(setup_button_down)
     {
         if(current-setup_button_time>WAIT_SETUP_MS)
@@ -299,14 +317,24 @@ void WaterBoardCounter::loop()
     }
     else
     {
+        bool need_sleep=true;
+        for(int i=0;i<WBC_COUNTER_SIZE;i++)
+        {
+            if(current-counters[i].timestamp<WAIT_SLEEP_MS)
+            {
+                need_sleep=false;
+                break;
+            }
+        }
         if(need_sleep)
         {
-            //light_sleep();
+            light_sleep();
         }
     }
 };
 void WaterBoardCounter::light_sleep()
 {
+    Serial.println("Light sleep enter");
 #ifdef ESP8266
     wifi_station_disconnect();
     wifi_set_opmode_current(NULL_MODE);
@@ -316,8 +344,10 @@ void WaterBoardCounter::light_sleep()
     gpio_pin_wakeup_enable(WBC_0_PIN, GPIO_PIN_INTR_LOLEVEL);
     gpio_pin_wakeup_enable(WBC_1_PIN, GPIO_PIN_INTR_LOLEVEL);
     wifi_fpm_do_sleep(0xFFFFFFF); // Sleep for longest possible time
+    delay(100);
 #else
     //esp_sleep_enable_ext1_wakeup()
     esp_light_sleep_start();
 #endif
+    Serial.println("Light sleep leave");
 }
