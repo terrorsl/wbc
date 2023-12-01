@@ -63,7 +63,7 @@ IRAM_ATTR void setup_callback()
 void WaterBoardCounter::update_counter(uint8_t index, uint8_t v)
 {
     unsigned long time = millis();
-    if(counters[index].timestamp-time<600)
+    if(time-counters[index].timestamp<600)
         return;
     Serial.println("update_counter");
     counters[index].value += v;
@@ -215,8 +215,12 @@ void WaterBoardCounter::detach_interrupt()
 };
 void WaterBoardCounter::setup_button()
 {
+    unsigned long time = millis();
+    if(time-setup_button_time<100)
+        return;
+    Serial.println("setup_button");
     setup_button_down=!setup_button_down;
-    setup_button_time=millis();
+    setup_button_time=time;
 }
 bool WaterBoardCounter::init_wifi()
 {
@@ -274,10 +278,10 @@ void WaterBoardCounter::loop()
             String mqtt_user=config["mqtt"]["user"];
             String mqtt_passw=config["mqtt"]["passw"];
             Serial.println(mqtt_server);
-            Serial.printf("port:\n",mqtt_port);
+            Serial.printf("port:%d\n",mqtt_port);
             Serial.println(mqtt_user);
 
-            digitalWrite(LED_PIN, HIGH);
+            digitalWrite(LED_PIN, LOW);
 
             if(setup_wifi(mqtt_device.c_str(), mqtt_server.c_str(), String(mqtt_port).c_str(), mqtt_user.c_str(), mqtt_passw.c_str()))
             {
@@ -317,6 +321,7 @@ void WaterBoardCounter::loop()
                     save_config();
                     digitalWrite(LED_PIN, HIGH);  // turn the LED off so they know the CPU isn't running
                     light_sleep();
+                    before_time=millis();
                 }
             }
         }
