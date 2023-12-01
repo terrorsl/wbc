@@ -41,6 +41,11 @@
 #define WBC_INI "/wbc.ini"
 #define WBC_JSON "/wbc.json"
 
+static const char *mqtt_topic_result PROGMEM = "/result";
+static const char *mqtt_topic_set PROGMEM = "/set";
+static const char *mqtt_topic_status PROGMEM = "/status";
+static const char *mqtt_topic_firmware PROGMEM = "/firmware";
+
 #define INTERRUPT_ALL 0xff
 #define WAIT_SETUP_MS 3000
 #define WAIT_SLEEP_MS 60000
@@ -86,7 +91,7 @@ public:
     WiFiManager *get_wifi_manager(){return manager;}
 private:
     bool setup_wifi(const char *device_name, const char *server, const char *port, const char *mqtt_user, const char *mqtt_password);
-    bool init_wifi(const char *server, uint16_t port, const char *mqtt_user, const char *mqtt_password);
+    bool init_wifi();
 
     void init_config();
     void read_config();
@@ -98,8 +103,6 @@ private:
     void light_sleep();
 
     void send_result();
-
-    void save();
 
     WiFiManager *manager;
     WiFiManagerParameter *wifi_manager_params[WIFI_PARAM_COUNT];
