@@ -1,9 +1,13 @@
 #ifndef WBC_FILE
 #define WBC_FILE
 
+// device description
+#define WBC_NAME "Water Board Counter"
+#define WBC_VERSION "1.0"
+
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
-#define WBC_COUNTER_SIZE 2
+#define WBC_COUNTER_SIZE 4
 #define LED_PIN 2
 #define SETUP_BUTTON_PIN 12
 #define VDROP_PIN 4
@@ -58,32 +62,16 @@ static const char *mqtt_topic_firmware PROGMEM = "/firmware";
 #include<WiFiManager.h>
 #include <PubSubClient.h>
 
-enum CounterValueType
-{
-    LITER,
-    CUBIC_METER
-};
-struct Counter
-{
-    Counter()
-    {
-        value=0;
-        value_per_count=10;
-    };
-    unsigned char value_type;
-    // value per count, example 1 count = 10 liter
-    unsigned char value_per_count;
-    // full value
-    unsigned long value;
-    unsigned long timestamp;
+#include"wbc_counter.h"
+#include"wbc_mqtt.h"
 
-    char serial[32];
-};
 class WaterBoardCounter
 {
 public:
     bool setup();
     void loop();
+
+    void connect_broker();
 
     void update_counter(uint8_t index, uint8_t value);
     void setup_button();
@@ -91,6 +79,8 @@ public:
     WiFiManager *get_wifi_manager(){return manager;}
 private:
     bool setup_wifi(const char *device_name, const char *server, const char *port, const char *mqtt_user, const char *mqtt_password);
+    bool setup_wifi();
+
     bool init_wifi();
 
     void init_config();
@@ -102,7 +92,11 @@ private:
 
     void light_sleep();
 
-    void send_result();
+    bool send_result();
+
+    void configure_mqtt_home_assistant();
+
+    bool is_setup_active(unsigned long current_time_ms);
 
     WiFiManager *manager;
     WiFiManagerParameter *wifi_manager_params[WIFI_PARAM_COUNT];
@@ -116,5 +110,9 @@ private:
 
     bool setup_button_down;
     unsigned long setup_button_time;
+
+    bool send_module_data;
+
+    WBCMqttBroker *broker;
 };
 #endif

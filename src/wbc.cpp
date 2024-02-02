@@ -4,11 +4,20 @@
 #include <NTPClient.h>
 #include <CronAlarms.h>
 
-WiFiClient espClient;
+//WiFiClient espClient;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 DynamicJsonDocument config(256);
 extern WaterBoardCounter wbc;
+
+void onStationWifiConnected(const WiFiEventStationModeConnected &)
+{
+    wbc.connect_broker();
+}
+void onStationWifiDisconnected(const WiFiEventStationModeDisconnected&)
+{
+    //wbc.connect_wifi();
+}
 
 void callback(char* topic, byte* payload, unsigned int length)
 {
@@ -65,18 +74,18 @@ void WaterBoardCounter::update_counter(uint8_t index, uint8_t v)
     unsigned long time = millis();
     if(time-counters[index].timestamp<600)
         return;
-    Serial.println("update_counter");
+    //Serial.println("update_counter");
     counters[index].value += v;
     counters[index].timestamp = time;
     need_update_value=true;
 };
-void WaterBoardCounter::send_result()
+bool WaterBoardCounter::send_result()
 {
     Serial.println("try send result");
     if(WiFi.isConnected()==false || mqtt_client.connected()==false)
     {
         if(init_wifi()==false)
-            return;
+            return false;
     }
     String mqtt_device=config["mqtt"]["device"];
     DynamicJsonDocument root(256);
@@ -102,7 +111,7 @@ void WaterBoardCounter::send_result()
         payload="low battery";
         break;
     }
-    mqtt_client.publish(topic.c_str(), payload.c_str(), true);
+    return mqtt_client.publish(topic.c_str(), payload.c_str(), true);
 };
 bool WaterBoardCounter::setup()
 {
@@ -139,8 +148,15 @@ bool WaterBoardCounter::setup()
         read_config();
         counters[0].value=config["counter0"]["value"];
     }
-    mqtt_client.setClient(espClient);
+
+    //mqtt_client.setClient(espClient);
     mqtt_client.setCallback(callback);
+
+    if(config["mqtt"].containsKey("default"))
+    {
+        broker = wbc_createBroker(config["mqtt"]["default"], config["mqtt"]["server"], config["mqtt"]["port"]);
+        broker->load(config);
+    }
 
     String mqtt_server=config["mqtt"]["server"];
     uint16_t mqtt_port=config["mqtt"]["port"];
@@ -150,7 +166,28 @@ bool WaterBoardCounter::setup()
 
     before_time = millis();
     status = WBC_STATUS_OK;
+
+    send_module_data=true;
+
+    WiFi.onStationModeConnected(onStationWifiConnected);
+    WiFi.onStationModeDisconnected(onStationWifiDisconnected);
+
+    WiFi.begin();
     return true;
+};
+bool WaterBoardCounter::setup_wifi()
+{
+    manager = new WiFiManager();
+
+    wifi_manager_params[0]=new WiFiManagerParameter("mqtt_select", "Select broker","", 40, "<select></select>");
+
+    manager->setSaveConfigCallback(saveWifiManagerParam);
+
+    const char *name = config["mqtt"]["device"];
+    bool status=manager->startConfigPortal(name);
+
+    delete manager;
+    return status;
 };
 bool WaterBoardCounter::setup_wifi(const char *name, const char *server, const char *port, const char *mqtt_user, const char *mqtt_password)
 {
@@ -218,14 +255,20 @@ void WaterBoardCounter::setup_button()
     unsigned long time = millis();
     if(time-setup_button_time<100)
         return;
-    Serial.println("setup_button");
+    //Serial.println("setup_button");
     setup_button_down=!setup_button_down;
     setup_button_time=time;
 }
+void WaterBoardCounter::connect_broker()
+{
+    broker->connect();
+};
 bool WaterBoardCounter::init_wifi()
 {
     if(WiFi.isConnected())
     {
+        broker->connect();
+
         String mqtt_device=config["mqtt"]["device"];
         String mqtt_user=config["mqtt"]["user"];
         String mqtt_passw=config["mqtt"]["passw"];
@@ -237,6 +280,13 @@ bool WaterBoardCounter::init_wifi()
             Serial.println("mqtt connected");
             String topic=mqtt_device+mqtt_topic_set;//"/set";
             mqtt_client.subscribe(topic.c_str());
+
+            if(send_module_data)
+            {
+                String topic=mqtt_device+mqtt_topic_firmware;
+                mqtt_client.publish(topic.c_str(),WBC_VERSION,true);
+                send_module_data=false;
+            }
             return true;
         }
     }
@@ -244,12 +294,25 @@ bool WaterBoardCounter::init_wifi()
         WiFi.begin();
     return false;
 };
+bool WaterBoardCounter::is_setup_active(unsigned long current_time_ms)
+{
+    if(setup_button_down==false)
+        return false;
+    if(current_time_ms-setup_button_time<WAIT_SETUP_MS)
+        return false;
+    setup_button_down = false;
+    return true;
+};
 void WaterBoardCounter::loop()
 {
     unsigned long current = millis();
-    if(current - before_time > 10000)
+
+    broker->update(current);
+
+    if(need_update_value && (current - before_time > 10000))
     {
-        send_result();
+        broker->publish(counters, WBC_COUNTER_SIZE);
+        need_update_value = false;
         before_time = current;
     }
 
@@ -265,7 +328,7 @@ void WaterBoardCounter::loop()
             settimeofday(&tv,0);
         }
     }
-
+#if 0
     if(setup_button_down)
     {
         if(current-setup_button_time>WAIT_SETUP_MS)
@@ -292,6 +355,19 @@ void WaterBoardCounter::loop()
             setup_button_down=false;
         }
     }
+#else
+    if(is_setup_active(current))
+    {
+        digitalWrite(LED_PIN, LOW);
+
+        if(setup_wifi())
+        {
+            save_config();
+        }
+
+        digitalWrite(LED_PIN, HIGH);
+    }
+#endif
     else
     {
         bool need_sleep=true;
@@ -305,11 +381,15 @@ void WaterBoardCounter::loop()
         }
         if(need_sleep)
         {
+#if 0
             if(mqtt_client.connected())
             {
                 mqtt_client.disconnect();
             }
             else
+#else
+            if(broker->disconnect())
+#endif
             {
                 if(WiFi.isConnected())
                 {
@@ -353,6 +433,8 @@ void WaterBoardCounter::init_config()
 #else
     String mqtt_device = "WBC_" + String(ESP.getEfuseMac());
 #endif
+    config["mqtt"]["enable"] = false;
+    config["mqtt"]["default"] = "custom";
 
     config["mqtt"]["device"]=mqtt_device;
     config["mqtt"]["server"]="mqtt.dealgate.ru";
@@ -372,12 +454,49 @@ void WaterBoardCounter::read_config()
 {
     fs::File file = LittleFS.open(WBC_JSON,"r");
     deserializeJson(config, file);
-    serializeJsonPretty(config, Serial);
     file.close();
+    serializeJsonPretty(config, Serial);
 };
 void WaterBoardCounter::save_config()
 {
     fs::File file = LittleFS.open(WBC_JSON,"w");
     serializeJson(config, file);
     file.close();
+};
+void WaterBoardCounter::configure_mqtt_home_assistant()
+{
+    std::string discovery_prefix("homeassistant");
+    std::string component("sensor");
+    std::string object_id("WBC");
+
+    std::string topic=discovery_prefix+"/"+component+"/"+object_id;
+    std::string config_topic=discovery_prefix+"/"+component+"/"+object_id+"/config";
+    std::string available_topic=discovery_prefix+"/"+component+"/"+object_id+"/available";
+    DynamicJsonDocument payload(256);
+    payload["device_class"]="volume";
+    payload["state_topic"]=topic+"/state";
+    payload["unit_of_measurement"]="m3";
+    payload["value_template"]="{{ value_json.counter0}}";
+    payload["unique_id"]="wbc_c0";
+    payload["device"]["identifiers"]="Water Counter";
+    payload["device"]["name"]="Water Counter";
+    payload["device"]["manufacturer"]="DIY Board";
+    payload["device"]["model"]="WBC";
+    payload["device"]["serial_number"]="unknown";
+    payload["device"]["hw_version"]="1.0";
+    payload["device"]["sw_version"]="1.0";
+
+    String payload_str;
+    serializeJson(payload, payload_str);
+    config_topic = topic + "/c0/config";
+    mqtt_client.publish(config_topic.c_str(), payload_str.c_str(), true);
+
+    config_topic = topic + "/c1/config";
+    payload["value_template"]="{{ value_json.counter1}}";
+    payload["unique_id"]="wbc_c1";
+    serializeJson(payload, payload_str);
+    mqtt_client.publish(config_topic.c_str(), payload_str.c_str(), true);
+
+
+    mqtt_client.publish(available_topic.c_str(), "online");
 };
