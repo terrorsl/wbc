@@ -1,4 +1,7 @@
 #include"wbc.h"
+
+#include<EEPROM.h>
+
 #include<LittleFS.h>
 #include <ArduinoJson.h>
 #include <NTPClient.h>
@@ -81,7 +84,8 @@ void WaterBoardCounter::update_counter(uint8_t index, uint8_t v)
 };
 bool WaterBoardCounter::send_result()
 {
-    Serial.println("try send result");
+    return false;
+    /*Serial.println("try send result");
     if(WiFi.isConnected()==false || mqtt_client.connected()==false)
     {
         if(init_wifi()==false)
@@ -111,7 +115,7 @@ bool WaterBoardCounter::send_result()
         payload="low battery";
         break;
     }
-    return mqtt_client.publish(topic.c_str(), payload.c_str(), true);
+    return mqtt_client.publish(topic.c_str(), payload.c_str(), true);*/
 };
 bool WaterBoardCounter::setup()
 {
@@ -150,12 +154,16 @@ bool WaterBoardCounter::setup()
     }
 
     //mqtt_client.setClient(espClient);
-    mqtt_client.setCallback(callback);
+    //mqtt_client.setCallback(callback);
 
     if(config["mqtt"].containsKey("default"))
     {
         broker = wbc_createBroker(config["mqtt"]["default"], config["mqtt"]["server"], config["mqtt"]["port"]);
         broker->load(config);
+    }
+    else
+    {
+        broker = wbc_createBroker("dealgate", "mqtt.dealgate.ru", 1883);
     }
 
     String mqtt_server=config["mqtt"]["server"];
@@ -169,8 +177,8 @@ bool WaterBoardCounter::setup()
 
     send_module_data=true;
 
-    WiFi.onStationModeConnected(onStationWifiConnected);
-    WiFi.onStationModeDisconnected(onStationWifiDisconnected);
+    WiFi.onStationModeConnected(&onStationWifiConnected);
+    WiFi.onStationModeDisconnected(&onStationWifiDisconnected);
 
     WiFi.begin();
     return true;
@@ -179,7 +187,18 @@ bool WaterBoardCounter::setup_wifi()
 {
     manager = new WiFiManager();
 
-    wifi_manager_params[0]=new WiFiManagerParameter("mqtt_select", "Select broker","", 40, "<select></select>");
+    const char *brokers="<select><option value=\"homeassistant\">HomeAssistant</option>\
+        <option value=\"dealgate\">Dealgate</option>\
+        <option value=\"custom\">Custom</option>\
+        </select>";
+    wifi_manager_params[0]=new WiFiManagerParameter("mqtt_select", "Select broker","", 40, brokers);
+    wifi_manager_params[1]=new WiFiManagerParameter("mqtt_server", "Mqtt server","", 40);
+    wifi_manager_params[2]=new WiFiManagerParameter("mqtt_port", "Mqtt port","", 40);
+    wifi_manager_params[3]=new WiFiManagerParameter("mqtt_login", "Mqtt login","", 40);
+    wifi_manager_params[4]=new WiFiManagerParameter("mqtt_password", "Mqtt password","", 40);
+
+    for(int i=0;i<5;i++)
+        manager->addParameter(wifi_manager_params[i]);
 
     manager->setSaveConfigCallback(saveWifiManagerParam);
 
@@ -265,7 +284,7 @@ void WaterBoardCounter::connect_broker()
 };
 bool WaterBoardCounter::init_wifi()
 {
-    if(WiFi.isConnected())
+    /*if(WiFi.isConnected())
     {
         broker->connect();
 
@@ -291,7 +310,7 @@ bool WaterBoardCounter::init_wifi()
         }
     }
     else
-        WiFi.begin();
+        WiFi.begin();*/
     return false;
 };
 bool WaterBoardCounter::is_setup_active(unsigned long current_time_ms)
@@ -309,17 +328,17 @@ void WaterBoardCounter::loop()
 
     broker->update(current);
 
-    if(need_update_value && (current - before_time > 10000))
+    if(need_update_value && (current - before_time > wbc_mqtt_send_interval))
     {
         broker->publish(counters, WBC_COUNTER_SIZE);
         need_update_value = false;
         before_time = current;
     }
 
-    if(mqtt_client.connected())
+    /*if(mqtt_client.connected())
     {
         mqtt_client.loop();
-    }
+    }*/
     if(WiFi.isConnected())
     {
         if(timeClient.update())
@@ -402,6 +421,7 @@ void WaterBoardCounter::loop()
                     digitalWrite(LED_PIN, HIGH);  // turn the LED off so they know the CPU isn't running
                     light_sleep();
                     before_time=millis();
+                    WiFi.mode(WIFI_STA);
                 }
             }
         }

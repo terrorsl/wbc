@@ -5,8 +5,12 @@
 #include <PubSubClient.h>
 #include<string>
 
+#define WBC_DEFAULT_KEEP_ALIVE 60000
+
+#define wbc_mqtt_send_interval 10000
 #define wbc_mqtt_reconnect_timeout 10000
 #define wbc_mqtt_topic_set_prefix "/set"
+#define wbc_mqtt_topic_state_prefix "/state"
 #define wbc_mqtt_topic_available_prefix "/available"
 
 #define wbc_mqtt_make_topic(discovery,component,object) discovery+"/"+component+"/"+object
@@ -26,6 +30,7 @@ public:
     void update(unsigned long current_time_ms);
     
     virtual void config()=0;
+    //virtual void default_config(DynamicJsonDocument &doc)=0;
     virtual void load(DynamicJsonDocument &doc)=0;
     virtual void save(DynamicJsonDocument &doc)=0;
 protected:
@@ -49,6 +54,7 @@ class WBCMqttDealgate:public WBCMqttBroker
 public:
     WBCMqttDealgate();
     void config();
+    //void default_config(DynamicJsonDocument &doc);
     void load(DynamicJsonDocument &doc);
     void save(DynamicJsonDocument &doc);
 };
@@ -57,6 +63,7 @@ class WBCMqttHomeAssistant:public WBCMqttBroker
 public:
     WBCMqttHomeAssistant(const char *server, unsigned short port);
     void config();
+    //void default_config(DynamicJsonDocument &doc);
     void load(DynamicJsonDocument &doc);
     void save(DynamicJsonDocument &doc);
 private:
@@ -67,6 +74,7 @@ class WBCMqttCustom:public WBCMqttBroker
 public:
     WBCMqttCustom(const char *server, unsigned short port);
     void config();
+    //void default_config(DynamicJsonDocument &doc){}
     void load(DynamicJsonDocument &doc){}
     void save(DynamicJsonDocument &doc){};
 };

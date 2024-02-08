@@ -41,7 +41,7 @@ bool WBCMqttBroker::disconnect()
 }
 void WBCMqttBroker::publish(Counter *counters, unsigned char count)
 {
-    std::string payload, topic=wbc_mqtt_make_topic(discovery_prefix,component,object_id);
+    std::string payload, topic=wbc_mqtt_make_topic(discovery_prefix,component,object_id)+wbc_mqtt_topic_state_prefix;
     DynamicJsonDocument doc(256);
     for(unsigned char index=0;index<count;index++)
     {
@@ -73,12 +73,17 @@ void WBCMqttBroker::load_common(DynamicJsonDocument &doc)
     discovery_prefix = obj["discovery_prefix"].as<std::string>();
     component = obj["component"].as<std::string>();
     object_id = obj["object_id"].as<std::string>();
+
+    unsigned short keepalive=WBC_DEFAULT_KEEP_ALIVE;
+    if(obj.containsKey("keep_alive"))
+        keepalive=obj["keep_alive"].as<unsigned short>();
+    client.setKeepAlive(keepalive);
 };
 void WBCMqttBroker::save_common(DynamicJsonDocument &doc)
 {
     doc["mqtt"]["discovery_prefix"] = discovery_prefix;
     doc["mqtt"]["component"] = component;
-    doc["mqtt"]["object_id"] = object_id;  
+    doc["mqtt"]["object_id"] = object_id;
 };
 void WBCMqttBroker::config_common()
 {
@@ -108,10 +113,10 @@ void WBCMqttHomeAssistant::config()
     if(is_first_time)
     {
         // on first connect send configuration.
-        std::string config_topic=topic+"/config";
+        std::string config_topic;//=topic+"/config";
         DynamicJsonDocument payload(256);
         payload["device_class"]="volume";
-        payload["state_topic"]=topic+"/state";
+        payload["state_topic"]=topic+wbc_mqtt_topic_state_prefix;
         payload["unit_of_measurement"]="m3";
         payload["value_template"]="{{ value_json.counter0}}";
         payload["unique_id"]="wbc_c0";

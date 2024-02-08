@@ -42,13 +42,7 @@
 #if WBC_COUNTER_SIZE==4
 #endif
 
-#define WBC_INI "/wbc.ini"
 #define WBC_JSON "/wbc.json"
-
-static const char *mqtt_topic_result PROGMEM = "/result";
-static const char *mqtt_topic_set PROGMEM = "/set";
-static const char *mqtt_topic_status PROGMEM = "/status";
-static const char *mqtt_topic_firmware PROGMEM = "/firmware";
 
 #define INTERRUPT_ALL 0xff
 #define WAIT_SETUP_MS 3000
