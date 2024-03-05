@@ -151,6 +151,11 @@ bool WaterBoardCounter::setup()
     {
         read_config();
         counters[0].value=config["counter0"]["value"];
+        counters[1].value=config["counter1"]["value"];
+#if WBC_COUNTER_SIZE == 4
+        counters[2].value=config["counter2"]["value"];
+        counters[3].value=config["counter3"]["value"];
+#endif
     }
 
     //mqtt_client.setClient(espClient);
@@ -187,17 +192,27 @@ bool WaterBoardCounter::setup_wifi()
 {
     manager = new WiFiManager();
 
-    const char *brokers="<select><option value=\"homeassistant\">HomeAssistant</option>\
-        <option value=\"dealgate\">Dealgate</option>\
-        <option value=\"custom\">Custom</option>\
-        </select>";
-    wifi_manager_params[0]=new WiFiManagerParameter("mqtt_select", "Select broker","", 40, brokers);
-    wifi_manager_params[1]=new WiFiManagerParameter("mqtt_server", "Mqtt server","", 40);
-    wifi_manager_params[2]=new WiFiManagerParameter("mqtt_port", "Mqtt port","", 40);
-    wifi_manager_params[3]=new WiFiManagerParameter("mqtt_login", "Mqtt login","", 40);
-    wifi_manager_params[4]=new WiFiManagerParameter("mqtt_password", "Mqtt password","", 40);
+    const char *brokers=R"(
+        <label for="mqtt_select">Select broker</label>
+        <select name="mqtt_select" id="mqtt_select" onchange="document.getElementById('mqtt_select_value').value = this.value">
+            <option value="homeassistant">HomeAssistant</option>
+            <option value="dealgate">Dealgate</option>
+            <option value="custom">Custom</option>
+        </select>
+        <script>
+            document.getElementById('mqtt_select').value = "%d";
+            document.querySelector("[for='mqtt_select_value']").hidden = true;
+            document.getElementById('mqtt_select_value').hidden = true;
+        </script>
+    )";
+    wifi_manager_params[0]=new WiFiManagerParameter(brokers);
+    wifi_manager_params[1]=new WiFiManagerParameter("mqtt_select_value", "Will be hidden", "homeassistant", 16);
+    wifi_manager_params[2]=new WiFiManagerParameter("mqtt_server", "Mqtt server",config["mqtt"]["server"], 40);
+    wifi_manager_params[3]=new WiFiManagerParameter("mqtt_port", "Mqtt port",config["mqtt"]["port"], 6);
+    wifi_manager_params[4]=new WiFiManagerParameter("mqtt_login", "Mqtt login",config["mqtt"]["user"], 40);
+    wifi_manager_params[5]=new WiFiManagerParameter("mqtt_password", "Mqtt password",config["mqtt"]["passw"], 40);
 
-    for(int i=0;i<5;i++)
+    for(int i=0;i<6;i++)
         manager->addParameter(wifi_manager_params[i]);
 
     manager->setSaveConfigCallback(saveWifiManagerParam);
@@ -206,6 +221,10 @@ bool WaterBoardCounter::setup_wifi()
     bool status=manager->startConfigPortal(name);
 
     delete manager;
+
+    for(int i=0;i<6;i++)
+        delete wifi_manager_params[i];
+
     return status;
 };
 bool WaterBoardCounter::setup_wifi(const char *name, const char *server, const char *port, const char *mqtt_user, const char *mqtt_password)
